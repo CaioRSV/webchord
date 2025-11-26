@@ -13,12 +13,15 @@ A powerful, professional-grade chord synthesizer that runs entirely in your brow
 
 ### 🎼 Music Creation
 - **Nashville Number System**: Play chords by scale degree (I, ii, iii, IV, V, vi, vii°)
+<<<<<<< HEAD
 - **AI Chord Suggestions** 🎯: 
   - Real-time next chord predictions using Markov Chains + Music Theory + Randomization
   - 4 varied suggestions with probability indicators
   - Smart analysis of your playing patterns
   - Instant feedback when you match predictions
   - Creativity bonus for exciting and unexpected progressions
+=======
+>>>>>>> dac44d39553f781e61bfb6846b7ac78a137df056
 - **Multiple Playback Modes**: 
   - Play Mode: Direct chord playback
   - Arpeggiator: Up, Down, Up-Down, Random patterns with configurable speed, octave range, and gate
@@ -266,6 +269,7 @@ wasm-pack build --target web --out-dir ../src/audio/wasm
 2. Add a new preset object with all parameters
 3. The preset will automatically appear in the UI
 
+<<<<<<< HEAD
 ### Understanding the Chord Suggestion Engine
 
 The AI chord suggestion system uses a sophisticated multi-layered approach:
@@ -296,6 +300,8 @@ The system provides:
 - **Visual Feedback**: Highlights and animations when you match predictions
 - **Compact 2x2 Grid**: Positioned between chord buttons and artist presets for easy access
 
+=======
+>>>>>>> dac44d39553f781e61bfb6846b7ac78a137df056
 ---
 
 ## 🐛 Known Limitations
