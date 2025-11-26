@@ -117,6 +117,11 @@ export default function ChordButtons({ audioEngine }: ChordButtonsProps) {
           }
         });
         
+        // Dispatch chord played event for suggestion system
+        window.dispatchEvent(new CustomEvent('chordPlayed', {
+          detail: { degree, timestamp: pressTime }
+        }));
+        
         // Record all notes at once after playing to avoid race conditions
         if (isRecording && notesToRecord.length > 0) {
           if (isFirstChord) {
@@ -159,6 +164,12 @@ export default function ChordButtons({ audioEngine }: ChordButtonsProps) {
       } else if (currentMode === 'arpeggiator') {
         // Arpeggiator mode - proper implementation (NO full chord recording, only arp notes)
         console.log(`🎹 Starting arpeggiator for chord:`, chord);
+        
+        // Dispatch chord played event for suggestion system
+        window.dispatchEvent(new CustomEvent('chordPlayed', {
+          detail: { degree, timestamp: pressTime }
+        }));
+        
         const arpChord = [...chord];
         const baseVelocity = lastVelocityRef.current.get(degree) || 0.7;
         
@@ -468,9 +479,9 @@ export default function ChordButtons({ audioEngine }: ChordButtonsProps) {
   }, [arpIntervals]);
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur-md rounded-xl p-6 border border-slate-700 mb-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-white text-xl font-semibold">Chord Buttons</h2>
+    <div className="bg-slate-800/50 backdrop-blur-md rounded-xl p-4 border border-slate-700">
+      <div className="flex justify-between items-center mb-3">
+        <h2 className="text-white text-sm font-bold">🎹 CHORD BUTTONS</h2>
         <button
           onClick={() => {
             useAppStore.setState((state) => ({
@@ -480,16 +491,16 @@ export default function ChordButtons({ audioEngine }: ChordButtonsProps) {
               },
             }));
           }}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
             releaseMode === 'fixed'
-              ? 'bg-blue-500 hover:bg-blue-600 text-white'
-              : 'bg-orange-500 hover:bg-orange-600 text-white'
+              ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md'
+              : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-md'
           }`}
         >
-          {releaseMode === 'fixed' ? '🎹 Fixed Release' : '⚡ Immediate Release'}
+          {releaseMode === 'fixed' ? '🎹 Fixed' : '⚡ Instant'}
         </button>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-7 gap-2">
         {CHORD_NAMES.map((name, index) => {
           const isActive = activeButtons.has(index);
           const chordName = getChordName(key, index + 1);
@@ -516,26 +527,26 @@ export default function ChordButtons({ audioEngine }: ChordButtonsProps) {
                 handleButtonUp(index);
               }}
               className={`
-                relative p-8 rounded-xl font-bold text-lg transition-all
+                relative p-4 rounded-lg font-bold transition-all duration-150 cursor-pointer select-none group
                 ${isActive
                   ? color === 'green'
-                    ? 'bg-green-500 text-white scale-105 shadow-lg'
+                    ? 'bg-gradient-to-br from-green-500 to-green-600 text-white scale-[1.02] shadow-xl shadow-green-500/30 ring-2 ring-green-400'
                     : color === 'blue'
-                    ? 'bg-blue-500 text-white scale-105 shadow-lg'
-                    : 'bg-purple-500 text-white scale-105 shadow-lg'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white scale-[1.02] shadow-xl shadow-blue-500/30 ring-2 ring-blue-400'
+                    : 'bg-gradient-to-br from-purple-500 to-purple-600 text-white scale-[1.02] shadow-xl shadow-purple-500/30 ring-2 ring-purple-400'
+                  : 'bg-gradient-to-br from-slate-700 to-slate-800 text-slate-300 hover:from-slate-600 hover:to-slate-700 hover:scale-[1.01] hover:shadow-lg'
                 }
               `}
             >
-              <div className="text-2xl mb-2">{index + 1}</div>
-              <div className="text-sm">{name}</div>
-              <div className="text-xs mt-1 opacity-75">{chordName}</div>
+              <div className="text-xl font-black mb-1 group-hover:scale-110 transition-transform">{index + 1}</div>
+              <div className="text-xs font-bold opacity-90">{name}</div>
+              <div className="text-xs mt-0.5 opacity-60 truncate">{chordName}</div>
             </button>
           );
         })}
       </div>
-      <p className="text-slate-400 text-sm mt-4 text-center">
-        Press 1-7 keys or click buttons to play chords
+      <p className="text-slate-400 text-xs mt-2 text-center">
+        Keys 1-7 or click to play
       </p>
     </div>
   );

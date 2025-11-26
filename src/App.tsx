@@ -11,6 +11,7 @@ import PatternRecorder from './components/PatternRecorder/PatternRecorder';
 import Timeline from './components/Timeline/Timeline';
 import Visualizer from './components/Visualizer/Visualizer';
 import ArtistPresetSelector from './components/ArtistPresetSelector/ArtistPresetSelector';
+import ChordSuggestion from './components/ChordSuggestion/ChordSuggestion';
 
 function App() {
   const [audioEngine, setAudioEngine] = useState<WasmAudioEngine | null>(null);
@@ -117,12 +118,18 @@ function App() {
           {/* CENTER - Main Performance Area */}
           <div className="xl:col-span-6 space-y-3">
             <ChordButtons audioEngine={audioEngine} />
+            
+            {/* AI Chord Suggestion - Between Chords and Profiles */}
+            <div className="grid grid-cols-2 gap-3">
+              <ChordSuggestion />
+              <ArtistPresetSelector audioEngine={audioEngine} />
+            </div>
+            
             <PlaybackModes />
           </div>
 
           {/* RIGHT SIDEBAR - Effects & Utilities */}
           <div className="xl:col-span-3 space-y-3">
-            <ArtistPresetSelector audioEngine={audioEngine} />
             
             <div className="bg-slate-800/50 backdrop-blur-md rounded-xl p-4 border border-slate-700">
               <h3 className="text-white text-sm font-bold mb-3 flex items-center gap-2">

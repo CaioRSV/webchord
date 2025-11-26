@@ -25,6 +25,9 @@ export type ChordModType =
 
 export const NOTES: Key[] = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
+// Nashville Number System chord names
+export const CHORD_NAMES = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
+
 // Major scale intervals (semitones from root)
 const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];
 
