@@ -268,7 +268,6 @@ wasm-pack build --target web --out-dir ../src/audio/wasm
 2. Add a new preset object with all parameters
 3. The preset will automatically appear in the UI
 
-<<<<<<< HEAD
 ### Understanding the Chord Suggestion Engine
 
 The AI chord suggestion system uses a sophisticated multi-layered approach:
@@ -299,8 +298,6 @@ The system provides:
 - **Visual Feedback**: Highlights and animations when you match predictions
 - **Compact 2x2 Grid**: Positioned between chord buttons and artist presets for easy access
 
-=======
->>>>>>> dac44d39553f781e61bfb6846b7ac78a137df056
 ---
 
 ## 🐛 Known Limitations
