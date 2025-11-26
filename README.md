@@ -8,6 +8,7 @@ A powerful, professional-grade chord synthesizer that runs entirely in your brow
 ![TypeScript](https://img.shields.io/badge/TypeScript-5+-3178C6?style=for-the-badge&logo=typescript)
 
 ---
+<img width="2368" height="1246" alt="image" src="https://github.com/user-attachments/assets/2c2aca6a-47e4-40a8-b047-4327d96b94de" />
 
 ## ✨ Key Features
 
