@@ -3,6 +3,10 @@ import { useAppStore } from '../../store/useAppStore';
 import { Pattern, TimelineClip, RecordedNote } from '../../store/useAppStore';
 import { WasmAudioEngine } from '../../audio/WasmAudioEngine';
 import { generateChord } from '../../music/chords';
+import { generateProceduralProgression, GENERATIVE_PRESETS, GenerationConfig } from '../../utils/proceduralMusicGenerator';
+import { getGenerativePresetParameters } from '../../utils/generativePresetParameters';
+import { artistPresets } from '../../presets/artistPresets';
+import { getArtistGenerativeConfig } from '../../utils/artistToGenerativeMapping';
 
 interface TimelineProps {
   audioEngine: WasmAudioEngine | null;
@@ -23,6 +27,7 @@ export default function Timeline({ audioEngine }: TimelineProps) {
   const [trackCount, setTrackCount] = useState(4);
   const [totalBeats, setTotalBeats] = useState(32);
   const [isLooping, setIsLooping] = useState(true);
+  const [selectedPreset, setSelectedPreset] = useState<string>('Random');
   const playbackRef = useRef<{ 
     timelineNotes: Map<number, number>; 
     lastTime: number;
@@ -111,9 +116,22 @@ export default function Timeline({ audioEngine }: TimelineProps) {
       
       // Detect loop restart - clear scheduled notes so they can play again
       if (currentBeat < playbackRef.current.lastTime) {
-        console.log('🔁 Loop detected - clearing scheduled notes for replay');
+        console.log('🔁 Loop detected - clearing state for replay');
+        
+        // Clear scheduled notes to allow re-triggering
         scheduledNotes.clear();
+        
+        // Reset clip tracking for parameter reapplication
+        playbackRef.current.activeClips.clear();
+        playbackRef.current.currentParametersClipId = null;
+        playbackRef.current.activeClipsWithParams.clear();
         playbackRef.current.hasLooped = true;
+        
+        // NOTE: We do NOT clear timelineNotes here or force noteOff all notes
+        // The noteOn handler below will check if a note is already playing
+        // and stop it before re-triggering, preventing overlap without cutting notes prematurely
+        
+        console.log('✅ State cleared, notes will be managed by event handlers');
       }
       
       useAppStore.setState((state) => ({
@@ -183,6 +201,12 @@ export default function Timeline({ audioEngine }: TimelineProps) {
               scheduledNotes.add(noteKey);
               
               if (note.type === 'noteOn') {
+                // Safety check: if note is already playing, stop it first
+                // This handles edge cases where noteOff might have been missed
+                if (playbackRef.current.timelineNotes.has(note.midiNote)) {
+                  audioEngine.noteOff(note.midiNote, false);
+                }
+                
                 audioEngine.noteOn(note.midiNote, note.velocity);
                 // Track which notes this clip is playing
                 playbackRef.current.activeClips.get(clip.id)?.add(note.midiNote);
@@ -371,151 +395,117 @@ export default function Timeline({ audioEngine }: TimelineProps) {
   };
 
 
-  const randomizeSteps = () => {
-    // ===== MARKOV CHAIN-BASED CHORD PROGRESSION GENERATOR =====
-    // Based on music theory research: common chord progressions and functional harmony
+  const randomizeSteps = (presetName?: string) => {
+    // ===== ADVANCED PROCEDURAL MUSIC GENERATION =====
+    // Uses latest 2024/2025 techniques: Tension curves, Density mapping, 
+    // Phrase structures, Euclidean rhythms, Voice leading
     
-    // Transition probability matrix (Markov chain) - rows: current chord, cols: next chord
-    // Weighted based on common progressions in popular music
-    const transitionMatrix: { [key: number]: { [key: number]: number } } = {
-      1: { 1: 0.05, 2: 0.15, 3: 0.10, 4: 0.25, 5: 0.25, 6: 0.15, 7: 0.05 }, // I → often goes to IV, V, vi
-      2: { 1: 0.05, 2: 0.05, 3: 0.10, 4: 0.10, 5: 0.50, 6: 0.10, 7: 0.10 }, // ii → often goes to V (ii-V-I)
-      3: { 1: 0.10, 2: 0.10, 3: 0.05, 4: 0.25, 5: 0.10, 6: 0.30, 7: 0.10 }, // iii → often goes to vi, IV
-      4: { 1: 0.20, 2: 0.10, 3: 0.10, 4: 0.10, 5: 0.30, 6: 0.10, 7: 0.10 }, // IV → often goes to I, V
-      5: { 1: 0.40, 2: 0.05, 3: 0.05, 4: 0.15, 5: 0.05, 6: 0.25, 7: 0.05 }, // V → often resolves to I or vi (deceptive)
-      6: { 1: 0.10, 2: 0.15, 3: 0.10, 4: 0.25, 5: 0.25, 6: 0.05, 7: 0.10 }, // vi → often goes to IV, V, ii
-      7: { 1: 0.50, 2: 0.10, 3: 0.10, 4: 0.10, 5: 0.10, 6: 0.05, 7: 0.05 }, // vii → often resolves to I
-    };
+    // Get preset or use random settings
+    let config: GenerationConfig | undefined;
+    let artistPresetParams = null;
     
-    // Common progression templates (for variety)
-    const progressionTemplates = [
-      [1, 5, 6, 4],      // I-V-vi-IV (most popular pop progression)
-      [1, 4, 5, 1],      // I-IV-V-I (classic rock)
-      [6, 4, 1, 5],      // vi-IV-I-V (emotional progression)
-      [1, 6, 4, 5],      // I-vi-IV-V (50s progression)
-      [2, 5, 1],         // ii-V-I (jazz standard)
-      [1, 4, 6, 5],      // I-IV-vi-V
-      [6, 4, 5, 1],      // vi-IV-V-I
-      [1, 3, 4, 5],      // I-iii-IV-V
-    ];
-    
-    // Weighted random selection function
-    const weightedRandom = (weights: { [key: number]: number }): number => {
-      const totalWeight = Object.values(weights).reduce((sum, w) => sum + w, 0);
-      let random = Math.random() * totalWeight;
-      
-      for (const [degree, weight] of Object.entries(weights)) {
-        random -= weight;
-        if (random <= 0) return parseInt(degree);
-      }
-      return 1; // Fallback to tonic
-    };
-    
-    // Decide between template and Markov generation
-    const useTemplate = Math.random() < 0.6; // 60% use templates, 40% Markov
-    let progression: number[];
-    
-    if (useTemplate) {
-      // Use a template and optionally extend it
-      const template = progressionTemplates[Math.floor(Math.random() * progressionTemplates.length)];
-      const shouldExtend = Math.random() < 0.5;
-      
-      if (shouldExtend && template.length === 4) {
-        // Extend with Markov chain
-        progression = [...template];
-        const extensionLength = Math.floor(Math.random() * 3) + 1; // 1-3 extra chords
-        let currentChord = progression[progression.length - 1];
+    // Check if it's an artist preset first
+    if (presetName) {
+      const artistConfig = getArtistGenerativeConfig(presetName);
+      if (artistConfig) {
+        // It's an artist preset!
+        config = artistConfig.config;
+        console.log(`🎨 Using artist preset: ${presetName} - ${artistConfig.description}`);
         
-        for (let i = 0; i < extensionLength; i++) {
-          const nextChord = weightedRandom(transitionMatrix[currentChord]);
-          progression.push(nextChord);
-          currentChord = nextChord;
+        // Get the full artist preset for synthesis parameters
+        const artistPreset = artistPresets.find(p => p.artist === presetName);
+        if (artistPreset) {
+          artistPresetParams = artistPreset;
         }
-      } else {
-        progression = template;
+      } else if (GENERATIVE_PRESETS[presetName]) {
+        // It's a generative preset
+        const preset = GENERATIVE_PRESETS[presetName];
+        config = {
+          slots: 16,
+          density: preset.density || 0.5,
+          tensionCurve: preset.tensionCurve || 'arc',
+          rhythmicStyle: preset.rhythmicStyle || 'steady',
+          phraseStructure: preset.phraseStructure || 'ABAB',
+          creativity: preset.creativity || 0.5,
+        };
+        console.log(`🎭 Using generative preset: ${presetName}`);
       }
-    } else {
-      // Pure Markov chain generation
-      const length = Math.floor(Math.random() * 4) + 4; // 4-7 chords
-      progression = [1]; // Start with tonic
-      let currentChord = 1;
+    }
+    
+    if (!config) {
+      // Random configuration (fallback if preset not found or no preset specified)
+      const densityOptions = [0.25, 0.3, 0.4, 0.5, 0.6, 0.75];
+      const tensionOptions: Array<'arc' | 'wave' | 'buildup' | 'release' | 'random'> = ['arc', 'wave', 'buildup', 'release', 'random'];
+      const rhythmOptions: Array<'steady' | 'syncopated' | 'euclidean' | 'sparse' | 'random'> = ['steady', 'syncopated', 'euclidean', 'sparse', 'random'];
+      const phraseOptions: Array<'AABA' | 'ABAB' | 'ABAC' | 'question-answer' | 'through-composed'> = ['AABA', 'ABAB', 'ABAC', 'question-answer', 'through-composed'];
       
-      for (let i = 1; i < length; i++) {
-        const nextChord = weightedRandom(transitionMatrix[currentChord]);
-        progression.push(nextChord);
-        currentChord = nextChord;
-      }
+      config = {
+        slots: 16,
+        density: densityOptions[Math.floor(Math.random() * densityOptions.length)],
+        tensionCurve: tensionOptions[Math.floor(Math.random() * tensionOptions.length)],
+        rhythmicStyle: rhythmOptions[Math.floor(Math.random() * rhythmOptions.length)],
+        phraseStructure: phraseOptions[Math.floor(Math.random() * phraseOptions.length)],
+        creativity: Math.random() * 0.6 + 0.2, // 0.2 - 0.8
+      };
+      console.log('🎲 Using random configuration');
+      presetName = undefined; // Clear preset name for random
     }
     
-    // Ensure progression ends on a strong resolution (I or V) for better musicality
-    const lastChord = progression[progression.length - 1];
-    if (lastChord !== 1 && lastChord !== 5 && Math.random() < 0.7) {
-      progression.push(1); // Add tonic resolution
-    }
+    // Generate progression using advanced algorithm
+    const generatedSlots = generateProceduralProgression(config, key);
     
-    // Euclidean rhythm generator reserved for future use
-    // const euclideanRhythm = (steps: number, pulses: number): boolean[] => {
-    //   if (pulses >= steps) return Array(steps).fill(true);
-    //   if (pulses === 0) return Array(steps).fill(false);
-    //   
-    //   const pattern: boolean[] = Array(steps).fill(false);
-    //   for (let i = 0; i < steps; i++) {
-    //     if ((i * pulses) % steps < pulses) {
-    //       pattern[i] = true;
-    //     }
-    //   }
-    //   
-    //   return pattern;
-    // };
-    
-    // ===== PATTERN GENERATION =====
-    const beatsPerChord = 4 / progression.length; // Distribute over 4 beats
-    const patternLength = 4; // 4 seconds for 1 bar at 120 BPM
+    // Convert to timeline format (16 beats = 16 seconds at 60 BPM = 8 seconds at 120 BPM)
+    const secondsPerBeat = 60 / bpm;
+    const totalLengthSeconds = 16 * secondsPerBeat;
     const notes: RecordedNote[] = [];
     
-    // Generate chords with musical timing and dynamics
-    progression.forEach((degree, index) => {
-      const startBeat = index * beatsPerChord;
-      const startTime = (startBeat / 4) * patternLength * 1000; // Convert to ms
+    generatedSlots.forEach((slot) => {
+      if (slot.degree === null) return; // Skip rests
       
-      // Add micro-timing variations for human feel (±30ms)
-      const humanize = (Math.random() - 0.5) * 30;
+      const startBeat = slot.position;
+      let startTime = startBeat * secondsPerBeat * 1000; // Convert to ms
+      
+      // Apply swing for groove (shift timing slightly)
+      const swingAmount = slot.swing * secondsPerBeat * 100; // Convert to ms
+      startTime += swingAmount;
+      
+      // Add micro-timing variations for human feel (±15ms)
+      const humanize = (Math.random() - 0.5) * 15;
       const actualStartTime = startTime + humanize;
       
-      // Dynamic velocity based on position (louder on downbeats)
-      const isDownbeat = index % 4 === 0;
-      const baseVelocity = isDownbeat ? 0.85 : 0.65;
-      const velocityVariation = Math.random() * 0.15;
-      const velocity = Math.max(0.5, Math.min(1.0, baseVelocity + velocityVariation));
-      
       try {
-        const chord = generateChord(key, degree, undefined, 0, globalOctave);
+        const chord = generateChord(key, slot.degree, undefined, 0, globalOctave);
         
-        // Stagger note-on times slightly for more natural sound (arpeggio effect)
+        // Variable stagger based on rhythm style for more natural arpeggio
+        const baseStagger = 5 + (slot.stagger * 15); // 5-20ms range
+        
+        // Stagger note-on times for arpeggio effect
         chord.forEach((midiNote, noteIndex) => {
-          const noteStagger = noteIndex * 8; // 8ms between notes
+          const noteStagger = noteIndex * baseStagger;
           
           notes.push({
             midiNote,
-            velocity,
+            velocity: slot.velocity,
             type: 'noteOn' as const,
             time: actualStartTime + noteStagger,
             degree: 0,
           });
         });
         
-        // Note off with slight variation
-        const noteDuration = (beatsPerChord / 4) * patternLength * 1000;
-        const endTime = actualStartTime + (noteDuration * 0.85); // 85% duration
+        // Note off timing with voice leading considerations
+        const noteDuration = slot.duration * secondsPerBeat * 1000;
+        const durationMultiplier = 0.88 + (slot.stagger * 0.08); // 0.88-0.96 range
+        const endTime = actualStartTime + (noteDuration * durationMultiplier);
         
         chord.forEach((midiNote, noteIndex) => {
-          const noteStagger = noteIndex * 5; // Slightly faster release stagger
+          // Release in reverse order for smoother voice leading
+          const releaseStagger = (chord.length - 1 - noteIndex) * (baseStagger * 0.6);
           
           notes.push({
             midiNote,
-            velocity,
+            velocity: slot.velocity,
             type: 'noteOff' as const,
-            time: endTime + noteStagger,
+            time: endTime + releaseStagger,
             degree: 0,
           });
         });
@@ -524,25 +514,73 @@ export default function Timeline({ audioEngine }: TimelineProps) {
       }
     });
     
-    // Create pattern with descriptive name
-    const colors = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#06b6d4', '#84cc16'];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    // Create pattern name from progression
+    const romanNumerals = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
+    const chordDegrees = generatedSlots
+      .filter(s => s.degree !== null)
+      .map(s => romanNumerals[(s.degree as number) - 1]);
     
-    // Generate descriptive name based on progression
-    const progressionName = progression.map(d => {
-      const romanNumerals = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
-      return romanNumerals[d - 1];
-    }).join('-');
+    const progressionName = presetName 
+      ? `${presetName} (${chordDegrees.slice(0, 4).join('-')}...)`
+      : `${chordDegrees.slice(0, 4).join('-')} (${config.tensionCurve})`;
+    
+    // Color selection: use genre-specific color for artist presets
+    let patternColor: string;
+    if (artistPresetParams) {
+      const genreColors: { [key: string]: string } = {
+        'Ambient / Lo-fi': '#8b5cf6',
+        'Wave / Hardwave': '#ec4899',
+        'Lo-fi Hip Hop': '#10b981',
+        'Lo-fi / Jazz Hip Hop': '#f59e0b',
+        'Jazz Hop / Chillhop': '#3b82f6',
+        'Wave / Phonk': '#ef4444',
+        'Ambient Lo-fi': '#06b6d4',
+        'Chillhop / Ambient': '#84cc16',
+        'Chillwave / Electronic': '#a855f7',
+      };
+      patternColor = genreColors[artistPresetParams.genre] || '#8b5cf6';
+    } else {
+      const colors = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#06b6d4', '#84cc16'];
+      patternColor = colors[Math.floor(Math.random() * colors.length)];
+    }
+    
+    // Get synthesis parameters: use artist preset if available, otherwise generative preset
+    let synthParams;
+    if (artistPresetParams) {
+      synthParams = {
+        waveform: artistPresetParams.waveform,
+        adsr: artistPresetParams.adsr,
+        filter: artistPresetParams.filter,
+        lfo: artistPresetParams.lfo,
+        detune: artistPresetParams.detune,
+        effects: {
+          ...artistPresetParams.effects,
+          bass: { enabled: false, level: 0.5 },
+          stereo: { mode: 'stereo' as const },
+        },
+      };
+    } else {
+      synthParams = getGenerativePresetParameters(presetName);
+    }
     
     const newPattern: Pattern = {
       id: `pattern-${Date.now()}`,
       name: progressionName,
-      length: patternLength,
+      length: totalLengthSeconds,
       notes,
-      color: randomColor,
+      color: patternColor,
+      // Capture synthesis parameters for this pattern
+      capturedParameters: {
+        waveform: synthParams.waveform,
+        adsr: synthParams.adsr,
+        filter: synthParams.filter,
+        lfo: synthParams.lfo,
+        detune: synthParams.detune,
+        effects: synthParams.effects,
+      },
     };
     
-    // Add pattern to patterns list only (don't auto-place on timeline)
+    // Add pattern to patterns list
     useAppStore.setState((state) => ({
       sequencer: {
         ...state.sequencer,
@@ -550,10 +588,11 @@ export default function Timeline({ audioEngine }: TimelineProps) {
       },
     }));
     
-    console.log(`🎵 Generated pattern: ${progressionName}`);
-    console.log(`   • Progression: ${progression.join(' → ')}`);
-    console.log(`   • Method: ${useTemplate ? 'Template-based' : 'Markov chain'}`);
-    console.log(`   • 📚 Added to Pattern Library - drag to timeline to use`);
+    console.log(`✨ Generated: ${progressionName}`);
+    console.log(`   • Config: Density=${config.density}, Tension=${config.tensionCurve}, Rhythm=${config.rhythmicStyle}`);
+    console.log(`   • Phrase: ${config.phraseStructure}, Creativity=${config.creativity.toFixed(2)}`);
+    console.log(`   • Progression: ${chordDegrees.join(' → ')}`);
+    console.log(`   • 📚 Added to Pattern Library`);
   };
 
   return (
@@ -653,13 +692,44 @@ export default function Timeline({ audioEngine }: TimelineProps) {
           <span className="text-xl">📚</span>
           <h3 className="text-white text-sm font-semibold">Pattern Library</h3>
           <span className="text-slate-400 text-xs">(Drag patterns to timeline tracks)</span>
-          <button
-            onClick={randomizeSteps}
-            className="ml-auto px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold transition-all shadow-md"
-            title="Generate a random chord progression and add to timeline"
-          >
-            🎲 Generate Pattern
-          </button>
+          
+          {/* Preset Selector + Generate Button */}
+          <div className="ml-auto flex items-center gap-2">
+            <select
+              value={selectedPreset}
+              onChange={(e) => setSelectedPreset(e.target.value)}
+              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs font-semibold transition-all shadow-md cursor-pointer border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              title="Select generation style"
+            >
+              <option value="Random">🎲 Random</option>
+              
+              <optgroup label="🎭 Generative Presets">
+                <option value="Pop Hit">🎤 Pop Hit</option>
+                <option value="Ambient Chill">🌊 Ambient Chill</option>
+                <option value="Energetic EDM">⚡ Energetic EDM</option>
+                <option value="Jazz Exploration">🎷 Jazz Exploration</option>
+                <option value="Minimalist">🎭 Minimalist</option>
+                <option value="Epic Buildup">🏔️ Epic Buildup</option>
+                <option value="Completely Random">🌀 Completely Random</option>
+              </optgroup>
+              
+              <optgroup label="🎨 Artist Presets">
+                {artistPresets.map((preset) => (
+                  <option key={preset.id} value={preset.artist}>
+                    {preset.artist} ({preset.genre})
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            
+            <button
+              onClick={() => randomizeSteps(selectedPreset === 'Random' ? undefined : selectedPreset)}
+              className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded text-xs font-bold transition-all shadow-lg hover:shadow-xl hover:scale-105"
+              title={`Generate ${selectedPreset} pattern (16 slots with AI)`}
+            >
+              ✨ Generate
+            </button>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap p-3 bg-slate-900/50 rounded-lg min-h-[60px]">
           {patterns.length === 0 ? (
