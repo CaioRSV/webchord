@@ -1,6 +1,6 @@
 # 🎹 WebChord - Professional Browser-Based Chord Synthesizer
 
-A powerful (completed vibe coded), professional-grade chord synthesizer that runs entirely in your browser, featuring a **Rust/WebAssembly DSP audio engine** for near-native performance and the **Nashville Number System** for intuitive chord-based music creation.
+A powerful (completely vibe coded), professional-grade chord synthesizer that runs entirely in your browser, featuring a **Rust/WebAssembly DSP audio engine** for near-native performance and the **Nashville Number System** for intuitive chord-based music creation.
 
 ![WebChord](https://img.shields.io/badge/WebChord-v1.0-purple?style=for-the-badge)
 ![React](https://img.shields.io/badge/React-18+-61DAFB?style=for-the-badge&logo=react)
