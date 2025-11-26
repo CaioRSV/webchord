@@ -20,7 +20,7 @@ A powerful, professional-grade chord synthesizer that runs entirely in your brow
   - Smart analysis of your playing patterns
   - Instant feedback when you match predictions
   - Creativity bonus for exciting and unexpected progressions
-=======
+
 - **Multiple Playback Modes**: 
   - Play Mode: Direct chord playback
   - Arpeggiator: Up, Down, Up-Down, Random patterns with configurable speed, octave range, and gate
