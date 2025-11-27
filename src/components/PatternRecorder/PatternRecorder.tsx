@@ -37,6 +37,27 @@ export default function PatternRecorder({ onPatternCreated }: PatternRecorderPro
     };
   }, [isRecording, recordingStartTime]);
 
+  // Keyboard shortcut: Backspace to stop recording
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input/textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      // Backspace to stop recording
+      if (e.key === 'Backspace' && isRecording) {
+        e.preventDefault(); // Prevent browser back navigation
+        stopRecording();
+        console.log('⏹ Recording stopped via Backspace hotkey');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isRecording]);
+
   const enableRecording = () => {
     useAppStore.setState((state) => ({
       sequencer: {
