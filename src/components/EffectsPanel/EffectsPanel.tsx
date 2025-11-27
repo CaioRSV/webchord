@@ -7,6 +7,8 @@ interface EffectsPanelProps {
 
 export default function EffectsPanel({ audioEngine }: EffectsPanelProps) {
   const effects = useAppStore((state) => state.effects);
+  const currentMode = useAppStore((state) => state.audio.currentMode);
+  const isArpeggiatorMode = currentMode === 'arpeggiator';
 
   const toggleEffect = (effect: keyof typeof effects) => {
     if (effect === 'stereo') return; // Stereo doesn't have enabled toggle
@@ -106,21 +108,46 @@ export default function EffectsPanel({ audioEngine }: EffectsPanelProps) {
 
       <div className="space-y-4">
         {/* Glide/Portamento */}
-        <div className="bg-slate-700/50 rounded-lg p-4">
+        <div className={`rounded-lg p-4 relative ${
+          isArpeggiatorMode 
+            ? 'bg-slate-700/30 border-2 border-orange-500/50' 
+            : 'bg-slate-700/50'
+        }`}>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-white text-sm font-semibold">Glide</label>
+            <label className={`text-sm font-semibold ${
+              isArpeggiatorMode ? 'text-orange-400' : 'text-white'
+            }`}>
+              Glide
+            </label>
             <button
-              onClick={() => toggleEffect('glide')}
+              onClick={() => !isArpeggiatorMode && toggleEffect('glide')}
+              disabled={isArpeggiatorMode}
               className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
-                effects.glide.enabled
+                isArpeggiatorMode
+                  ? 'bg-orange-500/20 text-orange-400 cursor-not-allowed border border-orange-500/50'
+                  : effects.glide.enabled
                   ? 'bg-green-500 text-white'
                   : 'bg-slate-600 text-slate-300'
               }`}
+              title={isArpeggiatorMode ? 'Glide is disabled in Arpeggiator mode' : ''}
             >
-              {effects.glide.enabled ? 'ON' : 'OFF'}
+              {isArpeggiatorMode ? '⚠️ DISABLED' : effects.glide.enabled ? 'ON' : 'OFF'}
             </button>
           </div>
-          {effects.glide.enabled && (
+          
+          {isArpeggiatorMode && (
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded p-2 mb-2">
+              <p className="text-orange-400 text-xs flex items-center gap-2">
+                <span>⚠️</span>
+                <span className="font-semibold">Glide does not work with Arpeggiator mode</span>
+              </p>
+              <p className="text-orange-300/70 text-xs mt-1">
+                Switch to Play mode to enable Glide
+              </p>
+            </div>
+          )}
+          
+          {effects.glide.enabled && !isArpeggiatorMode && (
             <div>
               <label className="text-slate-300 text-xs">
                 Time: {effects.glide.time.toFixed(0)}ms

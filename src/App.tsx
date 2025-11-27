@@ -125,7 +125,7 @@ function App() {
               <ArtistPresetSelector audioEngine={audioEngine} />
             </div>
             
-            <PlaybackModes />
+            <PlaybackModes audioEngine={audioEngine} />
           </div>
 
           {/* RIGHT SIDEBAR - Effects & Utilities */}

@@ -1,14 +1,37 @@
+import { useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { WasmAudioEngine } from '../../audio/WasmAudioEngine';
 
-export default function PlaybackModes() {
+interface PlaybackModesProps {
+  audioEngine: WasmAudioEngine | null;
+}
+
+export default function PlaybackModes({ audioEngine }: PlaybackModesProps) {
   const currentMode = useAppStore((state) => state.audio.currentMode);
   const arpeggiator = useAppStore((state) => state.playback.arpeggiator);
+  const glideEnabled = useAppStore((state) => state.effects.glide.enabled);
+  const glideTime = useAppStore((state) => state.effects.glide.time);
 
   const setMode = (mode: any) => {
     useAppStore.setState((state) => ({
       audio: { ...state.audio, currentMode: mode },
     }));
   };
+
+  // Disable glide when arpeggiator is active, restore when switching back
+  useEffect(() => {
+    if (!audioEngine) return;
+
+    if (currentMode === 'arpeggiator') {
+      // Disable glide for arpeggiator mode
+      console.log('🎵 Arpeggiator mode: Disabling glide');
+      audioEngine.setGlideTime(0);
+    } else {
+      // Restore glide to user settings when leaving arpeggiator
+      console.log('🎹 Play mode: Restoring glide to', glideEnabled ? `${glideTime}ms` : 'disabled');
+      audioEngine.setGlideTime(glideEnabled ? glideTime : 0);
+    }
+  }, [currentMode, audioEngine, glideEnabled, glideTime]);
 
   const updateArpeggiator = (param: string, value: any) => {
     useAppStore.setState((state) => ({
