@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Pattern, TimelineClip, RecordedNote } from '../../store/useAppStore';
+import { exportArrangementAsJSON, importArrangementFromJSON, exportPatternAsJSON, downloadTextFile } from '../../utils/exportUtils';
 import { WasmAudioEngine } from '../../audio/WasmAudioEngine';
 import { generateChord } from '../../music/chords';
 import { generateProceduralProgression, GENERATIVE_PRESETS, GenerationConfig } from '../../utils/proceduralMusicGenerator';
@@ -353,6 +354,80 @@ export default function Timeline({ audioEngine }: TimelineProps) {
     }));
   };
 
+  const handleExportArrangementJSON = () => {
+    const state = useAppStore.getState();
+    const json = exportArrangementAsJSON(state);
+    downloadTextFile(json, `webchord-arrangement-${Date.now()}.json`, 'application/json');
+  };
+
+  const handleImportArrangementJSON = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const json = event.target?.result as string;
+          const imported = importArrangementFromJSON(json);
+          if (!imported) {
+            alert('❌ Invalid arrangement file');
+            return;
+          }
+
+          useAppStore.setState((state) => ({
+            ...state,
+            audio: {
+              ...state.audio,
+              bpm: imported.meta?.bpm ?? state.audio.bpm,
+            },
+            music: {
+              ...state.music,
+              key: (imported.meta?.key as any) ?? state.music.key,
+              mode: (imported.meta?.mode as any) ?? state.music.mode,
+            },
+            sequencer: {
+              ...state.sequencer,
+              patterns: imported.patterns,
+              timeline: imported.timeline,
+            },
+          }));
+
+          alert('✅ Arrangement imported!');
+        } catch (error) {
+          console.error('Failed to import arrangement:', error);
+          alert('❌ Failed to import arrangement');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  const handleExportAudioPrototype = async () => {
+    if (!audioEngine) {
+      alert('❌ Audio engine not ready');
+      return;
+    }
+
+    try {
+      await audioEngine.start();
+      const blob = await audioEngine.recordToAudioBlob(15000);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `webchord-arrangement-audio-${Date.now()}.webm`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Audio export failed:', error);
+      alert('❌ Failed to export audio (prototype)');
+    }
+  };
+
   const togglePlayback = () => {
     useAppStore.setState((state) => ({
       sequencer: {
@@ -614,6 +689,27 @@ export default function Timeline({ audioEngine }: TimelineProps) {
           >
             🔁 {isLooping ? 'Loop: ON' : 'Loop: OFF'}
           </button>
+          <button
+            onClick={handleExportArrangementJSON}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-all"
+            title="Export current arrangement (patterns + timeline) as JSON"
+          >
+            📤 Export JSON
+          </button>
+          <button
+            onClick={handleImportArrangementJSON}
+            className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-lg font-semibold transition-all"
+            title="Import arrangement (patterns + timeline) from JSON file"
+          >
+            📥 Import JSON
+          </button>
+          <button
+            onClick={handleExportAudioPrototype}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-all"
+            title="Prototype: record timeline audio to file (approx. 15s)"
+          >
+            🎧 Export Audio (beta)
+          </button>
           
           {/* Timeline Volume Control */}
           <div className="flex items-center gap-2 ml-4 px-3 py-2 bg-slate-700/50 rounded-lg">
@@ -766,6 +862,18 @@ export default function Timeline({ audioEngine }: TimelineProps) {
                     title="Delete pattern"
                   >
                     ×
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const json = exportPatternAsJSON(pattern);
+                      downloadTextFile(json, `webchord-pattern-${pattern.id}.json`, 'application/json');
+                    }}
+                    className="opacity-0 group-hover:opacity-100 ml-1 px-1.5 py-0.5 bg-black/30 rounded hover:bg-black/50 transition-opacity text-xs"
+                    title="Export pattern as JSON"
+                    draggable={false}
+                  >
+                    ⬇
                   </button>
                 </div>
                 <span className="text-xs opacity-75 block mt-1">

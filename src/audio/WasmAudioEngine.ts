@@ -276,6 +276,58 @@ export class WasmAudioEngine {
     }
   }
 
+  async recordToAudioBlob(durationMs: number = 10000): Promise<Blob> {
+    if (!this.audioContext || !this.scriptNode) {
+      await this.initialize();
+    }
+
+    if (!this.audioContext || !this.scriptNode) {
+      throw new Error('Audio engine not initialized');
+    }
+
+    if (typeof MediaRecorder === 'undefined') {
+      throw new Error('MediaRecorder is not supported in this browser');
+    }
+
+    const dest = this.audioContext.createMediaStreamDestination();
+    this.scriptNode.connect(dest);
+
+    const recorder = new MediaRecorder(dest.stream);
+    const chunks: BlobPart[] = [];
+
+    return new Promise<Blob>((resolve, reject) => {
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event);
+        try {
+          this.scriptNode && this.scriptNode.disconnect(dest);
+        } catch {}
+        reject(new Error('Failed to record audio'));
+      };
+
+      recorder.onstop = () => {
+        try {
+          this.scriptNode && this.scriptNode.disconnect(dest);
+        } catch {}
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        resolve(blob);
+      };
+
+      recorder.start();
+
+      setTimeout(() => {
+        if (recorder.state !== 'inactive') {
+          recorder.stop();
+        }
+      }, durationMs);
+    });
+  }
+
   dispose(): void {
     if (this.scriptNode) {
       this.scriptNode.disconnect();
