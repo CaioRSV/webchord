@@ -13,6 +13,18 @@ interface ChordSuggestionProps {
   onSuggestionHighlight?: (degrees: number[]) => void;
 }
 
+// Map degree to button key for Simple Mode
+const DEGREE_TO_KEY: Record<number, string> = {
+  0: 'Q',  // I chord
+  1: 'Q',  // I chord (alternative mapping)
+  2: 'W', 
+  3: 'E',
+  4: 'A',
+  5: 'S',
+  6: 'D',
+  7: 'F',
+};
+
 export default function ChordSuggestion({ onSuggestionHighlight }: ChordSuggestionProps) {
   const bpm = useAppStore((state) => state.audio.bpm);
   const [suggestions, setSuggestions] = useState<ChordSuggestionType[]>([]);
@@ -129,7 +141,7 @@ export default function ChordSuggestion({ onSuggestionHighlight }: ChordSuggesti
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-white font-bold text-base">
-                      {suggestion.degree + 1}. {CHORD_NAMES[suggestion.degree]}
+                      {CHORD_NAMES[suggestion.degree]} ({DEGREE_TO_KEY[suggestion.degree]})
                     </span>
                     {index === 0 && (
                       <span className="px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">

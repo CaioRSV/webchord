@@ -834,7 +834,7 @@ export default function Timeline({ audioEngine }: TimelineProps) {
   };
 
   return (
-    <div className="relative bg-slate-800/50 backdrop-blur-md rounded-xl p-6 border border-slate-700">
+    <div className="relative bg-slate-800/50 backdrop-blur-md rounded-xl p-3 sm:p-4 md:p-6 border border-slate-700">
       {isExportingAudio && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm cursor-wait">
           <div className="w-12 h-12 border-4 border-purple-400 border-t-transparent rounded-full animate-spin mb-4" />
@@ -842,9 +842,9 @@ export default function Timeline({ audioEngine }: TimelineProps) {
           <p className="text-slate-300 text-xs">This may take a few seconds. Please wait.</p>
         </div>
       )}
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-white text-xl font-semibold">🎼 Timeline Arranger</h2>
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+        <h2 className="text-white text-lg sm:text-xl font-semibold">🎼 Timeline Arranger</h2>
+        <div className="flex flex-wrap gap-2 justify-start md:justify-end">
           <button
             onClick={togglePlayback}
             className={`px-4 py-2 rounded-lg font-semibold transition-all ${
@@ -914,7 +914,7 @@ export default function Timeline({ audioEngine }: TimelineProps) {
           </div>
           
           {/* Timeline Volume Control */}
-          <div className="flex items-center gap-2 ml-4 px-3 py-2 bg-slate-700/50 rounded-lg">
+          <div className="flex items-center gap-2 md:ml-4 px-3 py-2 bg-slate-700/50 rounded-lg mt-2 md:mt-0">
             <span className="text-white text-sm font-semibold">🔊 Timeline:</span>
             <input
               type="range"
@@ -931,7 +931,7 @@ export default function Timeline({ audioEngine }: TimelineProps) {
       </div>
 
       {/* Timeline Controls */}
-      <div className="flex items-center gap-3 mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
+      <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
         <div className="flex items-center gap-2">
           <span className="text-slate-300 text-sm font-semibold">Tracks:</span>
           <button
@@ -987,11 +987,11 @@ export default function Timeline({ audioEngine }: TimelineProps) {
         {/* Step Sequencer (16 steps) - Horizontal Grid */}
 
       {/* Pattern Library - Drag & Drop to Timeline */}
-      <div className="mb-4 bg-slate-900/30 rounded-lg p-4 border border-slate-700/50">
-        <div className="flex items-center gap-2 mb-3">
+      <div className="mb-4 bg-slate-900/30 rounded-lg p-4 border border-slate-700/50 overflow-x-auto">
+        <div className="flex items-center gap-2 mb-3 min-w-max pr-2">
           <span className="text-xl">📚</span>
-          <h3 className="text-white text-sm font-semibold">Pattern Library</h3>
-          <span className="text-slate-400 text-xs">(Drag patterns to timeline tracks)</span>
+          <h3 className="text-white text-sm font-semibold whitespace-nowrap">Pattern Library</h3>
+          <span className="text-slate-400 text-xs whitespace-nowrap">(Drag patterns to timeline tracks)</span>
           
           {/* Preset Selector + Generate Button */}
           <div className="ml-auto flex items-center gap-2">

@@ -17,12 +17,12 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
   const key = useAppStore((state) => state.music.key);
   const globalOctave = useAppStore((state) => state.music.globalOctave);
   const uiMode = useAppStore((state) => state.ui.mode);
-
+  
   const [joystickPos, setJoystickPos] = useState<JoystickPos>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0);
   const [activeDegrees, setActiveDegrees] = useState<Set<number>>(new Set());
-
+  
   const keyMappings = useMemo(
     () => [
       { key: 'Q', degree: 1 },
@@ -60,8 +60,11 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
   useEffect(() => {
     if (!audioEngine) return;
 
-    const newDetune = joystickPos.x * 50; // -50..50 cents
-    const newReverbMix = Math.max(0, Math.min(1, 0.5 - joystickPos.y * 0.5));
+    // Make joystick movements more obvious in the sound
+    // X axis: stronger detune
+    const newDetune = joystickPos.x * 120; // -120..120 cents
+    // Y axis: push reverb mix more aggressively top/bottom
+    const newReverbMix = Math.max(0, Math.min(1, 0.6 - joystickPos.y * 0.9));
 
     useAppStore.setState((state) => ({
       synthesis: {
@@ -91,8 +94,9 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
     const baseDelayMix = st.effects.delay.mix;
 
     if (delayEnabled) {
-      const delayTime = Math.max(0.05, baseDelayTime + joystickPos.y * 0.25); // +/- 250ms
-      const delayMix = Math.max(0, Math.min(1, baseDelayMix + joystickPos.y * 0.3));
+      // Y axis: much wider delay time & mix swing
+      const delayTime = Math.max(0.03, baseDelayTime + joystickPos.y * 0.45); // ~±450ms
+      const delayMix = Math.max(0, Math.min(1, baseDelayMix + joystickPos.y * 0.6));
       audioEngine.setDelay(true, delayTime, st.effects.delay.feedback, delayMix);
 
       useAppStore.setState((state) => ({
@@ -112,8 +116,9 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
     if (flangerEnabled) {
       const baseDepth = st.effects.flanger.depth;
       const baseMix = st.effects.flanger.mix;
-      const depth = Math.max(0, baseDepth + joystickPos.x * 5); // +/- 5 ms
-      const mix = Math.max(0, Math.min(1, baseMix + joystickPos.x * 0.3));
+      // X axis: much deeper flanger and mix swing
+      const depth = Math.max(0, baseDepth + joystickPos.x * 12); // +/- 12 ms
+      const mix = Math.max(0, Math.min(1, baseMix + joystickPos.x * 0.6));
 
       audioEngine.setFlanger(true, st.effects.flanger.rate, depth, st.effects.flanger.feedback, mix);
 
@@ -605,18 +610,18 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
         </div>
 
         {/* Right: Joystick - spans 2 rows */}
-        <div className="flex items-center justify-center md:row-span-2">
+        <div className="flex items-center justify-center md:row-span-2 m-4">
           <div
-            className="relative w-48 h-48 rounded-full bg-slate-900/80 border border-slate-700 shadow-inner cursor-pointer select-none"
+            className="relative w-40 h-40 md:w-48 md:h-48 aspect-square rounded-full bg-slate-900/80 border border-slate-700 shadow-inner cursor-pointer select-none"
             ref={joystickRef}
             onMouseDown={handleJoystickMouseDown}
           >
-            <div className="absolute inset-4 rounded-full border border-slate-700/60" />
+            <div className="absolute inset-5 md:inset-6 rounded-full border border-slate-700/60" />
             <div
-              className="absolute w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 shadow-lg border border-white/30"
+              className="absolute w-11 h-11 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 shadow-lg border border-white/30"
               style={{
-                left: `calc(50% + ${joystickPos.x * 60}px - 1.5rem)`,
-                top: `calc(50% + ${joystickPos.y * 60}px - 1.5rem)`,
+                left: `calc(50% + ${joystickPos.x * 56}px - 1.5rem)`,
+                top: `calc(50% + ${joystickPos.y * 56}px - 1.5rem)`,
               }}
             />
           </div>

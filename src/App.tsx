@@ -82,26 +82,26 @@ function App() {
       {/* Fixed Top Bar - Recording & Visualization */}
       <div className="sticky top-0 z-50 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b-2 border-purple-600 shadow-2xl">
         <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Logo & Title - Compact */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-shrink-0">
               <div className="text-3xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">
                 WebChord
               </div>
             </div>
 
             {/* Recording Controls - PROMINENT */}
-            <div className="flex-1 max-w-md">
+            <div className="flex-1 max-w-md min-w-[200px]">
               <PatternRecorder />
             </div>
 
             {/* Visualizer - Compact Horizontal */}
-            <div className="flex-1 max-w-lg">
+            <div className="flex-1 max-w-lg min-w-[200px]">
               <Visualizer audioEngine={audioEngine} />
             </div>
 
             {/* UI Mode Toggle */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={() =>
                   useAppStore.setState((state) => ({
@@ -128,8 +128,23 @@ function App() {
       {/* Main Studio Console Layout */}
       <div className="flex-1 container mx-auto px-4 py-6">
         {uiMode === 'simple' ? (
-          <div className="max-w-4xl mx-auto">
-            <GameControlPad audioEngine={audioEngine} />
+          <div className="max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              {/* Left: Chord Suggestions */}
+              <div className="lg:col-span-1">
+                <ChordSuggestion />
+              </div>
+
+              {/* Right: GameControlPad */}
+              <div className="lg:col-span-3">
+                <GameControlPad audioEngine={audioEngine} />
+              </div>
+            </div>
+
+            {/* Timeline - Full Width */}
+            <div className="mt-6">
+              <Timeline audioEngine={audioEngine} />
+            </div>
           </div>
         ) : (
           <>
