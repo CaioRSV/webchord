@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useAppStore, Pattern } from '../../store/useAppStore';
+import { useAppStore, Pattern, RecordedAutomationEvent } from '../../store/useAppStore';
 
 interface PatternRecorderProps {
   onPatternCreated?: (pattern: Pattern) => void;
@@ -9,6 +9,7 @@ export default function PatternRecorder({ onPatternCreated }: PatternRecorderPro
   const isRecording = useAppStore((state) => state.sequencer.isRecording);
   const recordedNotes = useAppStore((state) => state.sequencer.recordedNotes);
   const recordingStartTime = useAppStore((state) => state.sequencer.recordingStartTime);
+  const automationEvents = useAppStore((state) => state.sequencer.automationEvents);
   const [recordingTime, setRecordingTime] = useState(0);
   const [patternName, setPatternName] = useState('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -65,6 +66,7 @@ export default function PatternRecorder({ onPatternCreated }: PatternRecorderPro
         isRecording: true,
         recordingStartTime: 0, // Will be set by first note
         recordedNotes: [],
+        automationEvents: [],
       },
     }));
   };
@@ -94,6 +96,7 @@ export default function PatternRecorder({ onPatternCreated }: PatternRecorderPro
       lastNoteTime,
       patternLength,
       notes: recordedNotes,
+      automationEvents,
     });
 
     const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
@@ -114,6 +117,7 @@ export default function PatternRecorder({ onPatternCreated }: PatternRecorderPro
         detune: currentState.synthesis.detune,
         effects: JSON.parse(JSON.stringify(currentState.effects)), // Deep clone
       },
+      automationEvents: automationEvents as RecordedAutomationEvent[],
     };
 
     useAppStore.setState((state) => ({
@@ -121,6 +125,7 @@ export default function PatternRecorder({ onPatternCreated }: PatternRecorderPro
         ...state.sequencer,
         patterns: [...state.sequencer.patterns, pattern],
         recordedNotes: [],
+        automationEvents: [],
       },
     }));
 
@@ -137,6 +142,7 @@ export default function PatternRecorder({ onPatternCreated }: PatternRecorderPro
       sequencer: {
         ...state.sequencer,
         recordedNotes: [],
+        automationEvents: [],
       },
     }));
     setPatternName('');

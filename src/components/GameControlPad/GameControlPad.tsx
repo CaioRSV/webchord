@@ -21,6 +21,7 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
   const [joystickPos, setJoystickPos] = useState<JoystickPos>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0);
+  const [activeDegrees, setActiveDegrees] = useState<Set<number>>(new Set());
 
   const keyMappings = useMemo(
     () => [
@@ -33,6 +34,15 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
     ],
     [],
   );
+
+  const PAD_COLORS: Record<number, string> = {
+    1: 'from-green-500 to-green-600 ring-green-400 shadow-green-500/40',
+    2: 'from-blue-500 to-blue-600 ring-blue-400 shadow-blue-500/40',
+    3: 'from-pink-500 to-pink-600 ring-pink-400 shadow-pink-500/40',
+    4: 'from-amber-500 to-amber-600 ring-amber-400 shadow-amber-500/40',
+    5: 'from-emerald-500 to-emerald-600 ring-emerald-400 shadow-emerald-500/40',
+    6: 'from-purple-500 to-purple-600 ring-purple-400 shadow-purple-500/40',
+  };
 
   const pressedKeysRef = React.useRef<Set<string>>(new Set());
   const activeChordNotesRef = React.useRef<Map<number, number[]>>(new Map());
@@ -116,13 +126,93 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
         },
       }));
     }
+
+    // If we're recording, log this joystick move as an automation event relative to recordingStartTime
+    const seqState = useAppStore.getState().sequencer;
+    if (seqState.isRecording) {
+      const now = performance.now();
+      const recordingStartTime = seqState.recordingStartTime || now;
+
+      // If this is the first event (recordingStartTime === 0), initialize it now
+      if (seqState.recordingStartTime === 0) {
+        useAppStore.setState((state) => ({
+          sequencer: {
+            ...state.sequencer,
+            recordingStartTime: now,
+          },
+        }));
+      }
+
+      const relativeTime = now - recordingStartTime;
+
+      useAppStore.setState((state) => ({
+        sequencer: {
+          ...state.sequencer,
+          automationEvents: [
+            ...state.sequencer.automationEvents,
+            {
+              time: relativeTime,
+              type: 'joystickMove',
+              data: {
+                x: joystickPos.x,
+                y: joystickPos.y,
+              },
+            },
+          ],
+        },
+      }));
+    }
   }, [joystickPos, audioEngine]);
 
   const handlePresetNext = () => {
     if (!presets.length) return;
-    const nextIndex = (selectedPresetIndex + 1) % presets.length;
-    setSelectedPresetIndex(nextIndex);
-    applyPreset(presets[nextIndex]);
+
+    setSelectedPresetIndex((prevIndex) => {
+      const nextIndex = (prevIndex + 1) % presets.length;
+      const nextPreset = presets[nextIndex];
+
+      // Apply the preset immediately
+      applyPreset(nextPreset);
+
+      // If recording, log this preset change as an automation event
+      const seqState = useAppStore.getState().sequencer;
+      if (seqState.isRecording) {
+        const now = performance.now();
+        const recordingStartTime = seqState.recordingStartTime || now;
+
+        if (seqState.recordingStartTime === 0) {
+          useAppStore.setState((state) => ({
+            sequencer: {
+              ...state.sequencer,
+              recordingStartTime: now,
+            },
+          }));
+        }
+
+        const relativeTime = now - recordingStartTime;
+
+        useAppStore.setState((state) => ({
+          sequencer: {
+            ...state.sequencer,
+            automationEvents: [
+              ...state.sequencer.automationEvents,
+              {
+                time: relativeTime,
+                type: 'presetChange',
+                data: {
+                  presetIndex: nextIndex,
+                  artist: nextPreset.artist,
+                  genre: nextPreset.genre,
+                  name: nextPreset.name,
+                },
+              },
+            ],
+          },
+        }));
+      }
+
+      return nextIndex;
+    });
   };
 
   const applyPreset = (preset: ArtistPreset) => {
@@ -213,6 +303,13 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
     const chord = generateChord(key, degree as any, undefined, 0, globalOctave);
     activeChordNotesRef.current.set(degree, chord);
 
+    // Update visual active state for pad buttons
+    setActiveDegrees((prev) => {
+      const next = new Set(prev);
+      next.add(degree);
+      return next;
+    });
+
     const state = useAppStore.getState();
     const isRecording = state.sequencer.isRecording;
     const recordingStartTime = state.sequencer.recordingStartTime;
@@ -221,6 +318,13 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
     chord.forEach((midiNote) => {
       audioEngine.noteOn(midiNote, 0.9);
     });
+
+    // Dispatch chord played event for suggestion/visual systems
+    window.dispatchEvent(
+      new CustomEvent('chordPlayed', {
+        detail: { degree, timestamp: pressTime },
+      }),
+    );
 
     if (isRecording) {
       const isFirstEvent = recordingStartTime === 0;
@@ -296,6 +400,13 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
     }
 
     activeChordNotesRef.current.delete(degree);
+
+    // Clear visual active state for pad buttons
+    setActiveDegrees((prev) => {
+      const next = new Set(prev);
+      next.delete(degree);
+      return next;
+    });
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -306,9 +417,17 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
       return;
     }
 
-    const key = e.key.toLowerCase();
+    const rawKey = e.key;
+    const key = rawKey.toLowerCase();
 
-    // Prevent auto-repeat: only trigger once while key is held
+    // Treat both modern (' ') and legacy ('Spacebar') values as Space based on key *or* code
+    if (rawKey === ' ' || rawKey === 'Spacebar' || e.code === 'Space') {
+      e.preventDefault();
+      handlePresetNext();
+      return;
+    }
+
+    // Prevent auto-repeat for chord keys: only trigger once while key is held
     if (pressedKeysRef.current.has(key)) {
       return;
     }
@@ -319,12 +438,6 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
       pressedKeysRef.current.add(key);
       startDegree(mapping.degree);
       return;
-    }
-
-    if (key === ' ') {
-      e.preventDefault();
-      pressedKeysRef.current.add(key);
-      startDegree(1); // Space: tonic
     }
   };
 
@@ -343,10 +456,6 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
     if (mapping) {
       stopDegree(mapping.degree);
       return;
-    }
-
-    if (key === ' ') {
-      stopDegree(1);
     }
   };
 
@@ -417,17 +526,26 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
       <div className="flex flex-col md:flex-row gap-4 items-stretch">
         {/* Left: Big chord buttons */}
         <div className="flex-1 grid grid-cols-3 gap-3">
-          {keyMappings.map(({ key, degree }) => (
-            <button
-              key={key}
-              onMouseDown={() => startDegree(degree)}
-              onMouseUp={() => stopDegree(degree)}
-              onMouseLeave={() => stopDegree(degree)}
-              className="h-20 md:h-24 rounded-xl bg-slate-700 hover:bg-slate-600 text-base md:text-lg font-bold text-slate-100 transition-all shadow-md flex items-center justify-center select-none"
-            >
-              {key}
-            </button>
-          ))}
+          {keyMappings.map(({ key, degree }) => {
+            const isActive = activeDegrees.has(degree);
+
+            return (
+              <button
+                key={key}
+                onMouseDown={() => startDegree(degree)}
+                onMouseUp={() => stopDegree(degree)}
+                onMouseLeave={() => stopDegree(degree)}
+                className={`h-20 md:h-24 rounded-xl text-base md:text-lg font-bold transition-all shadow-md flex items-center justify-center select-none
+                  ${isActive
+                    ? `bg-gradient-to-br text-white scale-[1.02] ring-2 ${PAD_COLORS[degree]}`
+                    : 'bg-slate-700 hover:bg-slate-600 text-slate-100'
+                  }
+                `}
+              >
+                {key}
+              </button>
+            );
+          })}
         </div>
 
         {/* Right: Joystick */}
@@ -451,7 +569,7 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
 
       <div className="text-xs text-slate-400 flex flex-col gap-1">
         <span>Keys W A S D Q E: trigger chords</span>
-        <span>Space: trigger tonic chord (W)</span>
+        <span>Space: switch artist preset</span>
         <span>Drag the circle: joystick (detune + reverb)</span>
         <span>Click preset badge: next artist preset</span>
       </div>

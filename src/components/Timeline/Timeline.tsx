@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import { Pattern, TimelineClip, RecordedNote } from '../../store/useAppStore';
+import { Pattern, TimelineClip, RecordedNote, RecordedAutomationEvent } from '../../store/useAppStore';
 import { exportArrangementAsJSON, importArrangementFromJSON, exportPatternAsJSON, downloadTextFile } from '../../utils/exportUtils';
 import { WasmAudioEngine } from '../../audio/WasmAudioEngine';
 import { generateChord } from '../../music/chords';
@@ -207,6 +207,148 @@ export default function Timeline({ audioEngine }: TimelineProps) {
             }
           }
           
+          // Apply recorded automation (preset changes, joystick moves) for this pattern/clip
+          if (pattern.automationEvents && pattern.automationEvents.length > 0) {
+            const wasm = audioEngine.wasmEngine;
+
+            if (wasm) {
+              pattern.automationEvents.forEach((event: RecordedAutomationEvent, index: number) => {
+                const eventKey = `${clip.id}-auto-${event.time}-${event.type}-${index}`;
+                const timeDiff = Math.abs(relativeTimeMs - event.time);
+
+                // 30ms tolerance window, same idea as notes
+                if (timeDiff < 30 && !scheduledNotes.has(eventKey)) {
+                  scheduledNotes.add(eventKey);
+
+                  if (event.type === 'presetChange') {
+                    const data = event.data || {};
+                    // Try to find the artist preset by identity; fall back to index if available
+                    const preset =
+                      artistPresets.find(
+                        (p) =>
+                          p.artist === data.artist &&
+                          p.genre === data.genre &&
+                          p.name === data.name,
+                      ) ||
+                      (typeof data.presetIndex === 'number'
+                        ? artistPresets[data.presetIndex] || null
+                        : null);
+
+                    if (preset) {
+                      const waveformMap: Record<string, number> = {
+                        sine: 0,
+                        sawtooth: 1,
+                        square: 2,
+                        triangle: 3,
+                        fm: 4,
+                        piano: 5,
+                      };
+
+                      // Apply full preset to TIMELINE engine only
+                      wasm.set_timeline_waveform(waveformMap[preset.waveform]);
+                      wasm.set_timeline_adsr(
+                        preset.adsr.attack,
+                        preset.adsr.decay,
+                        preset.adsr.sustain,
+                        preset.adsr.release,
+                      );
+                      wasm.set_timeline_lfo_rate(preset.lfo.rate);
+                      wasm.set_timeline_lfo_depth(preset.lfo.depth);
+                      wasm.set_timeline_lfo_waveform(preset.lfo.waveform);
+                      wasm.set_timeline_detune(preset.detune);
+
+                      // Effects
+                      const fx = preset.effects;
+                      wasm.set_timeline_glide_time(fx.glide.enabled ? fx.glide.time : 0);
+                      wasm.set_timeline_tremolo(
+                        fx.tremolo.enabled,
+                        fx.tremolo.rate,
+                        fx.tremolo.depth,
+                      );
+                      wasm.set_timeline_flanger(
+                        fx.flanger.enabled,
+                        fx.flanger.rate,
+                        fx.flanger.depth,
+                        fx.flanger.feedback,
+                        fx.flanger.mix,
+                      );
+                      wasm.set_timeline_delay(
+                        fx.delay.enabled,
+                        fx.delay.time,
+                        fx.delay.feedback,
+                        fx.delay.mix,
+                      );
+                      wasm.set_timeline_reverb(
+                        fx.reverb.enabled,
+                        fx.reverb.size,
+                        fx.reverb.damping,
+                      );
+                    }
+                  } else if (event.type === 'joystickMove') {
+                    const data = event.data || {};
+                    const x = typeof data.x === 'number' ? data.x : 0;
+                    const y = typeof data.y === 'number' ? data.y : 0;
+
+                    // Mirror the Simple Mode joystick behavior but for TIMELINE engine only
+                    const state = useAppStore.getState();
+
+                    const newDetune = x * 50; // -50..50 cents
+                    const baseReverbMix = state.effects.reverb.mix;
+                    const newReverbMix = Math.max(0, Math.min(1, 0.5 - y * 0.5));
+
+                    wasm.set_timeline_detune(newDetune);
+
+                    if (state.effects.reverb.enabled) {
+                      wasm.set_timeline_reverb(
+                        true,
+                        state.effects.reverb.size,
+                        newReverbMix,
+                      );
+                    }
+
+                    const delayEnabled = state.effects.delay.enabled;
+                    const baseDelayTime = state.effects.delay.time;
+                    const baseDelayMix = state.effects.delay.mix;
+
+                    if (delayEnabled) {
+                      const delayTime = Math.max(0.05, baseDelayTime + y * 0.25);
+                      const delayMix = Math.max(
+                        0,
+                        Math.min(1, baseDelayMix + y * 0.3),
+                      );
+                      wasm.set_timeline_delay(
+                        true,
+                        delayTime,
+                        state.effects.delay.feedback,
+                        delayMix,
+                      );
+                    }
+
+                    const flangerEnabled = state.effects.flanger.enabled;
+                    if (flangerEnabled) {
+                      const baseDepth = state.effects.flanger.depth;
+                      const baseMix = state.effects.flanger.mix;
+                      const depth = Math.max(0, baseDepth + x * 5);
+                      const mix = Math.max(
+                        0,
+                        Math.min(1, baseMix + x * 0.3),
+                      );
+
+                      wasm.set_timeline_flanger(
+                        true,
+                        state.effects.flanger.rate,
+                        depth,
+                        state.effects.flanger.feedback,
+                        mix,
+                      );
+                    }
+                  }
+                }
+              });
+            }
+          }
+
+          // Note playback for this pattern/clip
           pattern.notes.forEach((note) => {
             const noteKey = `${clip.id}-${note.time}-${note.midiNote}-${note.type}`;
             const timeDiff = Math.abs(relativeTimeMs - note.time);
