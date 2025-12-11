@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { WasmAudioEngine } from '../../audio/WasmAudioEngine';
 import { useAppStore } from '../../store/useAppStore';
 import { getAllPresets, ArtistPreset } from '../../presets/artistPresets';
-import { generateChord } from '../../music/chords';
+import { generateChord, getChordName } from '../../music/chords';
 
 interface GameControlPadProps {
   audioEngine: WasmAudioEngine | null;
@@ -25,12 +25,13 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
 
   const keyMappings = useMemo(
     () => [
-      { key: 'W', degree: 1 },
-      { key: 'A', degree: 2 },
-      { key: 'S', degree: 3 },
-      { key: 'D', degree: 4 },
-      { key: 'Q', degree: 5 },
-      { key: 'E', degree: 6 },
+      { key: 'Q', degree: 1 },
+      { key: 'W', degree: 2 },
+      { key: 'E', degree: 3 },
+      { key: 'A', degree: 4 },
+      { key: 'S', degree: 5 },
+      { key: 'D', degree: 6 },
+      { key: 'F', degree: 7 },
     ],
     [],
   );
@@ -42,6 +43,7 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
     4: 'from-amber-500 to-amber-600 ring-amber-400 shadow-amber-500/40',
     5: 'from-emerald-500 to-emerald-600 ring-emerald-400 shadow-emerald-500/40',
     6: 'from-purple-500 to-purple-600 ring-purple-400 shadow-purple-500/40',
+    7: 'from-red-500 to-red-600 ring-red-400 shadow-red-500/40',
   };
 
   const pressedKeysRef = React.useRef<Set<string>>(new Set());
@@ -523,44 +525,98 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
           {currentPreset ? `${currentPreset.artist} (${currentPreset.genre})` : 'No presets'}
         </button>
       </div>
-      <div className="flex flex-col md:flex-row gap-4 items-stretch">
-        {/* Left: Big chord buttons */}
-        <div className="flex-1 grid grid-cols-3 gap-3">
-          {keyMappings.map(({ key, degree }) => {
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+        {/* Left: Big chord buttons - 3 columns */}
+        <div className="md:col-span-3 grid grid-cols-3 gap-2 justify-items-center">
+          {keyMappings.slice(0, 6).map(({ key: keyboardKey, degree }) => {
             const isActive = activeDegrees.has(degree);
+            const chordLabel = getChordName(key as any, degree)
+              .replace('Major', 'maj')
+              .replace('Minor', 'min')
+              .replace('Dim', 'dim');
 
             return (
               <button
-                key={key}
+                key={keyboardKey}
                 onMouseDown={() => startDegree(degree)}
                 onMouseUp={() => stopDegree(degree)}
                 onMouseLeave={() => stopDegree(degree)}
-                className={`h-20 md:h-24 rounded-xl text-base md:text-lg font-bold transition-all shadow-md flex items-center justify-center select-none
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  startDegree(degree);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  stopDegree(degree);
+                }}
+                className={`h-24 md:h-28 rounded-xl text-base md:text-lg font-bold transition-all shadow-lg flex items-center justify-center select-none touch-none w-full
                   ${isActive
                     ? `bg-gradient-to-br text-white scale-[1.02] ring-2 ${PAD_COLORS[degree]}`
                     : 'bg-slate-700 hover:bg-slate-600 text-slate-100'
                   }
                 `}
               >
-                {key}
+                <div className="flex flex-col items-center justify-center leading-tight">
+                  <span>{chordLabel}</span>
+                  <span className="text-[10px] text-slate-200/70 mt-1">[{keyboardKey}]</span>
+                </div>
               </button>
             );
           })}
+          {/* Empty placeholders to center the last button */}
+          <div className="invisible" />
+          {(() => {
+            const lastMapping = keyMappings[6];
+            const isActive = activeDegrees.has(lastMapping.degree);
+            const chordLabel = getChordName(key as any, lastMapping.degree)
+              .replace('Major', 'maj')
+              .replace('Minor', 'min')
+              .replace('Dim', 'dim');
+
+            return (
+              <button
+                key={lastMapping.key}
+                onMouseDown={() => startDegree(lastMapping.degree)}
+                onMouseUp={() => stopDegree(lastMapping.degree)}
+                onMouseLeave={() => stopDegree(lastMapping.degree)}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  startDegree(lastMapping.degree);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  stopDegree(lastMapping.degree);
+                }}
+                className={`h-24 md:h-28 rounded-xl text-base md:text-lg font-bold transition-all shadow-lg flex items-center justify-center select-none touch-none w-full
+                  ${isActive
+                    ? `bg-gradient-to-br text-white scale-[1.02] ring-2 ${PAD_COLORS[lastMapping.degree]}`
+                    : 'bg-slate-700 hover:bg-slate-600 text-slate-100'
+                  }
+                `}
+              >
+                <div className="flex flex-col items-center justify-center leading-tight">
+                  <span>{chordLabel}</span>
+                  <span className="text-[10px] text-slate-200/70 mt-1">[{lastMapping.key}]</span>
+                </div>
+              </button>
+            );
+          })()}
+          <div className="invisible" />
         </div>
 
-        {/* Right: Joystick */}
-        <div className="flex items-center justify-center md:w-48">
+        {/* Right: Joystick - spans 2 rows */}
+        <div className="flex items-center justify-center md:row-span-2">
           <div
-            className="relative w-32 h-32 md:w-40 md:h-40 rounded-full bg-slate-900/80 border border-slate-700 shadow-inner cursor-pointer select-none"
+            className="relative w-48 h-48 rounded-full bg-slate-900/80 border border-slate-700 shadow-inner cursor-pointer select-none"
             ref={joystickRef}
             onMouseDown={handleJoystickMouseDown}
           >
-            <div className="absolute inset-3 rounded-full border border-slate-700/60" />
+            <div className="absolute inset-4 rounded-full border border-slate-700/60" />
             <div
-              className="absolute w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 shadow-lg border border-white/30"
+              className="absolute w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 shadow-lg border border-white/30"
               style={{
-                left: `calc(50% + ${joystickPos.x * 40}px - 1rem)`,
-                top: `calc(50% + ${joystickPos.y * 40}px - 1rem)`,
+                left: `calc(50% + ${joystickPos.x * 60}px - 1.5rem)`,
+                top: `calc(50% + ${joystickPos.y * 60}px - 1.5rem)`,
               }}
             />
           </div>
@@ -568,7 +624,7 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
       </div>
 
       <div className="text-xs text-slate-400 flex flex-col gap-1">
-        <span>Keys W A S D Q E: trigger chords</span>
+        <span>Keys W E R / A S D F: trigger I–VII chords (labels show chord names)</span>
         <span>Space: switch artist preset</span>
         <span>Drag the circle: joystick (detune + reverb)</span>
         <span>Click preset badge: next artist preset</span>

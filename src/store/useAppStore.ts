@@ -47,6 +47,14 @@ export interface RecordedNote {
   degree: number;
 }
 
+export type AutomationEventType = 'presetChange' | 'joystickMove';
+
+export interface RecordedAutomationEvent {
+  time: number;
+  type: AutomationEventType;
+  data: any;
+}
+
 export interface Pattern {
   id: string;
   name: string;
@@ -61,6 +69,8 @@ export interface Pattern {
   detune: number;
   effects: Effects;
   };
+  // Optional recorded automation (e.g. preset changes, joystick movements)
+  automationEvents?: RecordedAutomationEvent[];
 }
 
 export interface TimelineClip {
@@ -86,6 +96,7 @@ export interface Sequencer {
   isRecording: boolean;
   recordingStartTime: number;
   recordedNotes: RecordedNote[];
+  automationEvents: RecordedAutomationEvent[];
   patterns: Pattern[];
   timeline: TimelineClip[];
   playbackPosition: number; // in beats
@@ -241,6 +252,7 @@ export const useAppStore = create<AppState>(() => ({
     isRecording: false,
     recordingStartTime: 0,
     recordedNotes: [],
+    automationEvents: [],
     patterns: [],
     timeline: [],
     playbackPosition: 0,
