@@ -31,6 +31,7 @@ export default function Timeline({ audioEngine }: TimelineProps) {
   const [selectedPreset, setSelectedPreset] = useState<string>('Random');
   const [timelineVolume, setTimelineVolume] = useState(0.7); // 70% volume for timeline
   const [isExportingAudio, setIsExportingAudio] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'wav' | 'webm'>('wav');
   const playbackRef = useRef<{ 
     timelineNotes: Map<number, number>; 
     lastTime: number;
@@ -430,16 +431,28 @@ export default function Timeline({ audioEngine }: TimelineProps) {
       }
 
       // Delegar a exportação totalmente para o engine, sem mexer em isPlaying/playbackPosition
-      const blob = await (audioEngine as any).exportArrangementSilentlyToWav(
-        patternsState,
-        timelineState,
-        bpmState,
-      );
+      let blob: Blob;
+      if (exportFormat === 'webm' && (audioEngine as any).exportArrangementSilentlyToWebm) {
+        blob = await (audioEngine as any).exportArrangementSilentlyToWebm(
+          patternsState,
+          timelineState,
+          bpmState,
+        );
+      } else {
+        blob = await (audioEngine as any).exportArrangementSilentlyToWav(
+          patternsState,
+          timelineState,
+          bpmState,
+        );
+      }
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `webchord-arrangement-audio-${Date.now()}.wav`;
+      a.download =
+        exportFormat === 'webm'
+          ? `webchord_${Date.now()}.webm`
+          : `webchord_${Date.now()}.wav`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
@@ -731,18 +744,32 @@ export default function Timeline({ audioEngine }: TimelineProps) {
           >
             📥 Import JSON
           </button>
-          <button
-            onClick={handleExportAudioPrototype}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all text-white ${
-              isExportingAudio
-                ? 'bg-slate-800 cursor-not-allowed opacity-70'
-                : 'bg-slate-700 hover:bg-slate-600'
-            }`}
-            title="Prototype: record timeline audio to file (approx. 15s)"
-            disabled={isExportingAudio}
-          >
-            {isExportingAudio ? '⏳ Exporting...' : '🎧 Export Audio (beta)'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportAudioPrototype}
+              className={`px-4 py-2 rounded-lg font-semibold transition-all text-white ${
+                isExportingAudio
+                  ? 'bg-slate-800 cursor-not-allowed opacity-70'
+                  : 'bg-slate-700 hover:bg-slate-600'
+              }`}
+              title="Export current arrangement audio to file"
+              disabled={isExportingAudio}
+            >
+              {isExportingAudio ? '⏳ Exporting...' : '🎧 Export Audio'}
+            </button>
+            <div className="flex items-center gap-1 text-xs text-slate-300">
+              <span className="hidden sm:inline">Format:</span>
+              <select
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value as 'wav' | 'webm')}
+                className="px-2 py-1 bg-slate-800 text-slate-100 rounded-md text-xs font-semibold border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                title="Choose audio export format for the Export Audio button"
+              >
+                <option value="wav">WAV</option>
+                <option value="webm">WEBM</option>
+              </select>
+            </div>
+          </div>
           
           {/* Timeline Volume Control */}
           <div className="flex items-center gap-2 ml-4 px-3 py-2 bg-slate-700/50 rounded-lg">

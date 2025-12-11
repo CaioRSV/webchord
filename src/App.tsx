@@ -12,11 +12,13 @@ import Timeline from './components/Timeline/Timeline';
 import Visualizer from './components/Visualizer/Visualizer';
 import ArtistPresetSelector from './components/ArtistPresetSelector/ArtistPresetSelector';
 import ChordSuggestion from './components/ChordSuggestion/ChordSuggestion';
+import GameControlPad from './components/GameControlPad/GameControlPad';
 
 function App() {
   const [audioEngine, setAudioEngine] = useState<WasmAudioEngine | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const uiMode = useAppStore((state) => state.ui.mode);
 
   useEffect(() => {
     // Load state from URL or localStorage
@@ -97,60 +99,88 @@ function App() {
             <div className="flex-1 max-w-lg">
               <Visualizer audioEngine={audioEngine} />
             </div>
+
+            {/* UI Mode Toggle */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() =>
+                  useAppStore.setState((state) => ({
+                    ui: {
+                      ...state.ui,
+                      mode: state.ui.mode === 'simple' ? 'advanced' : 'simple',
+                    },
+                  }))
+                }
+                className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                  uiMode === 'simple'
+                    ? 'bg-purple-600 text-white border-purple-400 shadow-lg'
+                    : 'bg-slate-800 text-slate-200 border-slate-600 hover:bg-slate-700'
+                }`}
+                title="Toggle Simple / Advanced UI modes (GamePad vs full studio)"
+              >
+                {uiMode === 'simple' ? '🎮 Simple Mode' : '🧠 Advanced Mode'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main Studio Console Layout */}
       <div className="flex-1 container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-          
-          {/* LEFT SIDEBAR - Synthesis Parameters */}
-          <div className="xl:col-span-3 space-y-3">
-            <div className="bg-slate-800/50 backdrop-blur-md rounded-xl p-4 border border-slate-700">
-              <h3 className="text-white text-sm font-bold mb-3 flex items-center gap-2">
-                <span className="text-xl">🎛️</span> SYNTHESIS
-              </h3>
-              <ControlPanel audioEngine={audioEngine} />
-            </div>
+        {uiMode === 'simple' ? (
+          <div className="max-w-4xl mx-auto">
+            <GameControlPad audioEngine={audioEngine} />
           </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+              {/* LEFT SIDEBAR - Synthesis Parameters */}
+              <div className="xl:col-span-3 space-y-3">
+                <div className="bg-slate-800/50 backdrop-blur-md rounded-xl p-4 border border-slate-700">
+                  <h3 className="text-white text-sm font-bold mb-3 flex items-center gap-2">
+                    <span className="text-xl">🎛️</span> SYNTHESIS
+                  </h3>
+                  <ControlPanel audioEngine={audioEngine} />
+                </div>
+              </div>
 
-          {/* CENTER - Main Performance Area */}
-          <div className="xl:col-span-6 space-y-3">
-            <ChordButtons audioEngine={audioEngine} />
-            
-            {/* AI Chord Suggestion - Between Chords and Profiles */}
-            <div className="grid grid-cols-2 gap-3">
-              <ChordSuggestion />
-              <ArtistPresetSelector audioEngine={audioEngine} />
-            </div>
-            
-            <PlaybackModes audioEngine={audioEngine} />
-          </div>
+              {/* CENTER - Main Performance Area */}
+              <div className="xl:col-span-6 space-y-3">
+                <ChordButtons audioEngine={audioEngine} />
+                
+                {/* AI Chord Suggestion - Between Chords and Profiles */}
+                <div className="grid grid-cols-2 gap-3">
+                  <ChordSuggestion />
+                  <ArtistPresetSelector audioEngine={audioEngine} />
+                </div>
+                
+                <PlaybackModes audioEngine={audioEngine} />
+              </div>
 
-          {/* RIGHT SIDEBAR - Effects & Utilities */}
-          <div className="xl:col-span-3 space-y-3">
-            
-            <div className="bg-slate-800/50 backdrop-blur-md rounded-xl p-4 border border-slate-700">
-              <h3 className="text-white text-sm font-bold mb-3 flex items-center gap-2">
-                <span className="text-xl">✨</span> EFFECTS
-              </h3>
-              <EffectsPanel audioEngine={audioEngine} />
+              {/* RIGHT SIDEBAR - Effects & Utilities */}
+              <div className="xl:col-span-3 space-y-3">
+                <div className="bg-slate-800/50 backdrop-blur-md rounded-xl p-4 border border-slate-700">
+                  <h3 className="text-white text-sm font-bold mb-3 flex items-center gap-2">
+                    <span className="text-xl">✨</span> EFFECTS
+                  </h3>
+                  <EffectsPanel audioEngine={audioEngine} />
+                </div>
+                
+                <div className="bg-slate-800/50 backdrop-blur-md rounded-xl p-4 border border-slate-700">
+                  <h3 className="text-white text-sm font-bold mb-3 flex items-center gap-2">
+                    <span className="text-xl">💾</span> PRESETS
+                  </h3>
+                  <PresetManager />
+                </div>
+              </div>
             </div>
-            
-            <div className="bg-slate-800/50 backdrop-blur-md rounded-xl p-4 border border-slate-700">
-              <h3 className="text-white text-sm font-bold mb-3 flex items-center gap-2">
-                <span className="text-xl">💾</span> PRESETS
-              </h3>
-              <PresetManager />
-            </div>
-          </div>
-        </div>
 
-        {/* Bottom Section - Timeline (Full Width) */}
-        <div className="mt-6">
-          <Timeline audioEngine={audioEngine} />
-        </div>
+            {/* Bottom Section - Timeline (Full Width) */}
+            <div className="mt-6">
+              <Timeline audioEngine={audioEngine} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -521,6 +521,199 @@ export class WasmAudioEngine {
     return blob;
   }
 
+  // Versão WEBM da exportação silenciosa, usando MediaRecorder em vez de PCM/WAV
+  async exportArrangementSilentlyToWebm(
+    patterns: Pattern[],
+    timeline: TimelineClip[],
+    bpm: number,
+    extraTailSeconds: number = 1,
+  ): Promise<Blob> {
+    if (!patterns.length || !timeline.length) {
+      return new Blob([], { type: 'audio/webm' });
+    }
+
+    if (!this.audioContext || !this.scriptNode) {
+      await this.initialize();
+    }
+
+    if (!this.audioContext || !this.scriptNode) {
+      throw new Error('Audio engine not initialized');
+    }
+
+    if (typeof MediaRecorder === 'undefined') {
+      throw new Error('MediaRecorder is not supported in this browser');
+    }
+
+    await this.start();
+
+    // Reutilizar a lógica de eventos de exportArrangementSilentlyToWav: construir eventos e duração total
+    const secondsPerBeat = 60 / bpm;
+
+    type OfflineEvent = {
+      time: number;
+      type: 'noteOn' | 'noteOff';
+      midiNote: number;
+      velocity: number;
+    };
+
+    const events: OfflineEvent[] = [];
+    let maxEndTimeMs = 0;
+
+    const waveformMap: Record<string, number> = {
+      sine: 0,
+      sawtooth: 1,
+      square: 2,
+      triangle: 3,
+      fm: 4,
+      piano: 5,
+    };
+
+    let appliedParams = false;
+
+    for (const clip of timeline) {
+      const pattern = patterns.find((p) => p.id === clip.patternId);
+      if (!pattern) continue;
+
+      if (!appliedParams && (pattern as any).capturedParameters && this.wasmEngine) {
+        const params = (pattern as any).capturedParameters;
+        const wasm = this.wasmEngine;
+
+        try {
+          const wfIndex = waveformMap[params.waveform] ?? 0;
+          if (wasm.set_timeline_waveform) wasm.set_timeline_waveform(wfIndex);
+          if (wasm.set_timeline_adsr) wasm.set_timeline_adsr(
+            params.adsr.attack,
+            params.adsr.decay,
+            params.adsr.sustain,
+            params.adsr.release,
+          );
+          if (wasm.set_timeline_lfo_rate) wasm.set_timeline_lfo_rate(params.lfo.rate);
+          if (wasm.set_timeline_lfo_depth) wasm.set_timeline_lfo_depth(params.lfo.depth);
+          if (wasm.set_timeline_lfo_waveform) wasm.set_timeline_lfo_waveform(params.lfo.waveform);
+          if (wasm.set_timeline_detune) wasm.set_timeline_detune(params.detune);
+
+          if (params.effects) {
+            const effects = params.effects;
+            if (wasm.set_timeline_glide_time) wasm.set_timeline_glide_time(effects.glide?.enabled ? effects.glide.time : 0);
+            if (wasm.set_timeline_tremolo) wasm.set_timeline_tremolo(
+              effects.tremolo?.enabled,
+              effects.tremolo?.rate,
+              effects.tremolo?.depth,
+            );
+            if (wasm.set_timeline_flanger) wasm.set_timeline_flanger(
+              effects.flanger?.enabled,
+              effects.flanger?.rate,
+              effects.flanger?.depth,
+              effects.flanger?.feedback,
+              effects.flanger?.mix,
+            );
+            if (wasm.set_timeline_delay) wasm.set_timeline_delay(
+              effects.delay?.enabled,
+              effects.delay?.time,
+              effects.delay?.feedback,
+              effects.delay?.mix,
+            );
+            if (wasm.set_timeline_reverb) wasm.set_timeline_reverb(
+              effects.reverb?.enabled,
+              effects.reverb?.size,
+              effects.reverb?.damping,
+            );
+          }
+        } catch (e) {
+          console.warn('Failed to apply capturedParameters to timeline engine for WEBM export:', e);
+        }
+
+        appliedParams = true;
+      }
+
+      const clipStartMs = clip.startTime * secondsPerBeat * 1000;
+
+      for (const note of pattern.notes) {
+        const absoluteTime = clipStartMs + note.time;
+        events.push({
+          time: absoluteTime,
+          type: note.type,
+          midiNote: note.midiNote,
+          velocity: note.velocity,
+        });
+        if (absoluteTime > maxEndTimeMs) {
+          maxEndTimeMs = absoluteTime;
+        }
+      }
+    }
+
+    if (!events.length) {
+      return new Blob([], { type: 'audio/webm' });
+    }
+
+    const totalDurationMs = maxEndTimeMs + extraTailSeconds * 1000;
+
+    // Mutar monitor para não tocar nas caixas
+    this.setMonitorMuted(true);
+
+    // Limpar notas pendentes
+    this.stopAllTimelineNotes();
+
+    // Preparar MediaRecorder a partir do scriptNode
+    const dest = this.audioContext.createMediaStreamDestination();
+    this.scriptNode.connect(dest);
+
+    const recorder = new MediaRecorder(dest.stream);
+    const chunks: BlobPart[] = [];
+
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+
+    const timeouts: number[] = [];
+
+    recorder.start();
+
+    // Agendar eventos
+    for (const ev of events) {
+      const delay = Math.max(0, ev.time);
+      const id = window.setTimeout(() => {
+        if (!this.wasmEngine) return;
+        if (ev.type === 'noteOn') {
+          this.timelineNoteOn(ev.midiNote, ev.velocity);
+        } else {
+          this.timelineNoteOff(ev.midiNote);
+        }
+      }, delay);
+      timeouts.push(id);
+    }
+
+    await new Promise<void>((resolve) => {
+      const id = window.setTimeout(() => resolve(), totalDurationMs);
+      timeouts.push(id);
+    });
+
+    // Parar notas e recorder
+    this.stopAllTimelineNotes();
+    for (const id of timeouts) {
+      clearTimeout(id);
+    }
+
+    await new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+      if (recorder.state !== 'inactive') {
+        recorder.stop();
+      } else {
+        resolve();
+      }
+    });
+
+    try {
+      this.scriptNode.disconnect(dest);
+    } catch {}
+
+    this.setMonitorMuted(false);
+
+    return new Blob(chunks, { type: 'audio/webm' });
+  }
+
   startWavRecording(): void {
     this.pcmBuffers = [];
     this.isPcmRecording = true;

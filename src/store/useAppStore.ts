@@ -106,6 +106,14 @@ export interface Looper {
   loopLength: number; // bars
 }
 
+export type UiMode = 'simple' | 'advanced';
+export type UiControlFocus = 'pad' | 'synth' | 'effects' | 'timeline';
+
+export interface UiState {
+  mode: UiMode;
+  controlFocus: UiControlFocus;
+}
+
 export interface AppState {
   // Audio
   audio: {
@@ -152,6 +160,9 @@ export interface AppState {
   
   // Looper
   looper: Looper;
+
+  // UI / Interaction mode
+  ui: UiState;
 }
 
 // Keyboard-style ADSR - notes sustain at full volume when held
@@ -243,6 +254,11 @@ export const useAppStore = create<AppState>(() => ({
     recordedEvents: [],
     recordedNotes: [],
     loopLength: 0,
+  },
+
+  ui: {
+    mode: 'simple',
+    controlFocus: 'pad',
   },
 }));
 
