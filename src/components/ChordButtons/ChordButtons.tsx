@@ -20,6 +20,7 @@ const CHORD_COLORS = [
 
 export default function ChordButtons({ audioEngine }: ChordButtonsProps) {
   const [activeButtons, setActiveButtons] = useState<Set<number>>(new Set());
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [activeNotes, setActiveNotes] = useState<Map<number, number[]>>(new Map());
   const [arpIntervals, setArpIntervals] = useState<Map<number, ReturnType<typeof setInterval>>>(new Map());
   
@@ -54,6 +55,8 @@ export default function ChordButtons({ audioEngine }: ChordButtonsProps) {
     }
 
     try {
+      // Update visual selection cursor to follow the last triggered chord
+      setSelectedIndex(degree);
       console.log('🎵 Button down:', degree);
       
       // Track press time for velocity calculation
@@ -515,6 +518,7 @@ export default function ChordButtons({ audioEngine }: ChordButtonsProps) {
       <div className="grid grid-cols-7 gap-2">
         {CHORD_NAMES.map((name, index) => {
           const isActive = activeButtons.has(index);
+          const isSelected = selectedIndex === index;
           const chordName = getChordName(key, index + 1);
           const color = CHORD_COLORS[index];
 
@@ -548,6 +552,7 @@ export default function ChordButtons({ audioEngine }: ChordButtonsProps) {
                     : 'bg-gradient-to-br from-purple-500 to-purple-600 text-white scale-[1.02] shadow-xl shadow-purple-500/30 ring-2 ring-purple-400'
                   : 'bg-gradient-to-br from-slate-700 to-slate-800 text-slate-300 hover:from-slate-600 hover:to-slate-700 hover:scale-[1.01] hover:shadow-lg'
                 }
+                ${!isActive && isSelected ? 'ring-2 ring-purple-400 shadow-lg shadow-purple-500/40' : ''}
               `}
             >
               <div className="text-xl font-black mb-1 group-hover:scale-110 transition-transform">{index + 1}</div>

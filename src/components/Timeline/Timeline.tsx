@@ -30,6 +30,7 @@ export default function Timeline({ audioEngine }: TimelineProps) {
   const [isLooping, setIsLooping] = useState(true);
   const [selectedPreset, setSelectedPreset] = useState<string>('Random');
   const [timelineVolume, setTimelineVolume] = useState(0.7); // 70% volume for timeline
+  const [isExportingAudio, setIsExportingAudio] = useState(false);
   const playbackRef = useRef<{ 
     timelineNotes: Map<number, number>; 
     lastTime: number;
@@ -409,22 +410,42 @@ export default function Timeline({ audioEngine }: TimelineProps) {
 
   const handleExportAudioPrototype = async () => {
     if (!audioEngine) {
-      alert('❌ Audio engine not ready');
+      return;
+    }
+
+    if (isExportingAudio) {
       return;
     }
 
     try {
-      await audioEngine.start();
-      const blob = await audioEngine.recordToAudioBlob(15000);
+      setIsExportingAudio(true);
+
+      const state = useAppStore.getState();
+      const patternsState = state.sequencer.patterns;
+      const timelineState = state.sequencer.timeline;
+      const bpmState = state.audio.bpm;
+
+      if (!patternsState.length || !timelineState.length) {
+        return;
+      }
+
+      // Delegar a exportação totalmente para o engine, sem mexer em isPlaying/playbackPosition
+      const blob = await (audioEngine as any).exportArrangementSilentlyToWav(
+        patternsState,
+        timelineState,
+        bpmState,
+      );
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `webchord-arrangement-audio-${Date.now()}.webm`;
+      a.download = `webchord-arrangement-audio-${Date.now()}.wav`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Audio export failed:', error);
-      alert('❌ Failed to export audio (prototype)');
+    } finally {
+      setIsExportingAudio(false);
     }
   };
 
@@ -658,7 +679,14 @@ export default function Timeline({ audioEngine }: TimelineProps) {
   };
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur-md rounded-xl p-6 border border-slate-700">
+    <div className="relative bg-slate-800/50 backdrop-blur-md rounded-xl p-6 border border-slate-700">
+      {isExportingAudio && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm cursor-wait">
+          <div className="w-12 h-12 border-4 border-purple-400 border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-slate-100 font-semibold mb-1">Exporting audio...</p>
+          <p className="text-slate-300 text-xs">This may take a few seconds. Please wait.</p>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-white text-xl font-semibold">🎼 Timeline Arranger</h2>
         <div className="flex gap-2">
@@ -705,10 +733,15 @@ export default function Timeline({ audioEngine }: TimelineProps) {
           </button>
           <button
             onClick={handleExportAudioPrototype}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-all"
+            className={`px-4 py-2 rounded-lg font-semibold transition-all text-white ${
+              isExportingAudio
+                ? 'bg-slate-800 cursor-not-allowed opacity-70'
+                : 'bg-slate-700 hover:bg-slate-600'
+            }`}
             title="Prototype: record timeline audio to file (approx. 15s)"
+            disabled={isExportingAudio}
           >
-            🎧 Export Audio (beta)
+            {isExportingAudio ? '⏳ Exporting...' : '🎧 Export Audio (beta)'}
           </button>
           
           {/* Timeline Volume Control */}
@@ -874,6 +907,32 @@ export default function Timeline({ audioEngine }: TimelineProps) {
                     draggable={false}
                   >
                     ⬇
+                  </button>
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (!audioEngine || !audioEngine.renderPatternOfflineToWav) {
+                        alert('❌ Offline audio export not available');
+                        return;
+                      }
+                      try {
+                        const blob = await audioEngine.renderPatternOfflineToWav(pattern);
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `webchord-pattern-${pattern.id}.wav`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      } catch (error) {
+                        console.error('Pattern offline export failed:', error);
+                        alert('❌ Failed to export pattern audio');
+                      }
+                    }}
+                    className="opacity-0 group-hover:opacity-100 ml-1 px-1.5 py-0.5 bg-black/30 rounded hover:bg-black/50 transition-opacity text-xs"
+                    title="Export pattern as WAV (offline render)"
+                    draggable={false}
+                  >
+                    🎧
                   </button>
                 </div>
                 <span className="text-xs opacity-75 block mt-1">
