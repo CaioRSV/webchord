@@ -57,14 +57,14 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
     : null;
 
   // Apply joystick to detune + flanger on X, and reverb + delay on Y
+  // NOTE: keep ranges musical so moving while playing doesn't "bug out" or feel laggy
   useEffect(() => {
     if (!audioEngine) return;
 
-    // Make joystick movements more obvious in the sound
-    // X axis: stronger detune
-    const newDetune = joystickPos.x * 120; // -120..120 cents
-    // Y axis: push reverb mix more aggressively top/bottom
-    const newReverbMix = Math.max(0, Math.min(1, 0.6 - joystickPos.y * 0.9));
+    // X axis: moderate but clearly audible detune
+    const newDetune = joystickPos.x * 80; // -80..80 cents
+    // Y axis: reverb mix swing, but avoid going fully wet/dry
+    const newReverbMix = Math.max(0.1, Math.min(0.9, 0.5 - joystickPos.y * 0.5));
 
     useAppStore.setState((state) => ({
       synthesis: {
@@ -94,9 +94,9 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
     const baseDelayMix = st.effects.delay.mix;
 
     if (delayEnabled) {
-      // Y axis: much wider delay time & mix swing
-      const delayTime = Math.max(0.03, baseDelayTime + joystickPos.y * 0.45); // ~±450ms
-      const delayMix = Math.max(0, Math.min(1, baseDelayMix + joystickPos.y * 0.6));
+      // Y axis: musically useful delay modulation, but avoid huge time jumps or full-wet
+      const delayTime = Math.max(0.06, Math.min(1.0, baseDelayTime + joystickPos.y * 0.2)); // ~±200ms
+      const delayMix = Math.max(0, Math.min(0.5, baseDelayMix + joystickPos.y * 0.25));    // cap at 50%
       audioEngine.setDelay(true, delayTime, st.effects.delay.feedback, delayMix);
 
       useAppStore.setState((state) => ({
@@ -116,9 +116,9 @@ export default function GameControlPad({ audioEngine }: GameControlPadProps) {
     if (flangerEnabled) {
       const baseDepth = st.effects.flanger.depth;
       const baseMix = st.effects.flanger.mix;
-      // X axis: much deeper flanger and mix swing
-      const depth = Math.max(0, baseDepth + joystickPos.x * 12); // +/- 12 ms
-      const mix = Math.max(0, Math.min(1, baseMix + joystickPos.x * 0.6));
+      // X axis: keep flanger noticeable but not extreme
+      const depth = Math.max(0, Math.min(20, baseDepth + joystickPos.x * 6)); // moderate swing
+      const mix = Math.max(0, Math.min(0.7, baseMix + joystickPos.x * 0.3));   // cap at 70%
 
       audioEngine.setFlanger(true, st.effects.flanger.rate, depth, st.effects.flanger.feedback, mix);
 
